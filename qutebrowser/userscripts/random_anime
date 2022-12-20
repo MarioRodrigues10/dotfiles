@@ -1,0 +1,3 @@
+#!/bin/sh
+
+echo open "$(random_anime "$HOME/Dropbox/anime info/myanimelist/animelist"*.xml.gz)" >> "$QUTE_FIFO"

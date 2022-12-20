@@ -1,0 +1,326 @@
+#!/bin/python
+
+import subprocess as P
+import os
+import re
+import argparse
+import random
+import sys
+from fcntl import flock, LOCK_EX
+from contextlib import contextmanager
+from enum import auto, Enum
+from quteprinter import started_from_qute, get_qute_page, send_to_qute, qute_print, qute_wprint, qute_jseval
+from beautifulsoupUtils import unique_selector
+
+class InvalidUrlException(Exception):
+   pass
+
+class Status(Enum):
+   DOWNLOADED = auto()
+   TOREAD = auto()
+   UNKNOWN = auto()
+
+HENTAIDIR = "/media/NAS/Anime/Manga/nhentai"
+TOREAD = "{}/Dropbox/org/toread.org".format(os.environ["HOME"])
+
+QUTE_URL = ""
+
+# extremover = re.compile(r"^(.+)\.(jpg|png)$")
+idfinder = re.compile(r"^\[([0-9]+?)\].*$")                       # find id from filenames
+toreadfinder = re.compile(r"^https?://nhentai\.net/g/([0-9]+)/$") # find id from urls
+shorttoreadfinder = re.compile(r"^/g/([0-9]+)/?$")                # find id in short url
+
+def hid_to_url(hid):
+   return "https://nhentai.net/g/{}/".format(hid)
+
+def message(msg):
+   qute_print(msg)
+
+def downloaded_files():
+   with os.scandir(HENTAIDIR) as it:
+      for f in it:
+         yield f
+
+@contextmanager
+def with_toread(aslist=False):
+   with open(TOREAD, "r+") as f:
+      flock(f, LOCK_EX)
+      ids = [get_first_group(x.rstrip("\n"), toreadfinder) for x in f]
+      org = ids.copy()
+      if not aslist:
+         ids = set(ids)
+
+      yield ids
+
+      if not aslist:
+         order_keys = {e: i for i,e in enumerate(org)}
+         ids = sorted(ids, key=lambda x: order_keys.get(x, len(org)))
+
+      if ids != org:
+         f.seek(0, 0) #goto beginning
+         f.truncate()
+         for i in ids:
+            f.write(hid_to_url(i))
+            f.write("\n")
+
+def get_first_group(name, reg):
+   return reg.sub(r"\1", name)
+
+def get_downloaded_ids():
+   return {get_first_group(x.name, idfinder) for x in downloaded_files()}
+
+def get_qute_id():
+   if not toreadfinder.fullmatch(QUTE_URL):
+      message("invalid url: {}".format(QUTE_URL))
+      raise InvalidUrlException("invalid QUTE_URL: {}".format(QUTE_URL))
+
+   return get_first_group(QUTE_URL, toreadfinder)
+
+def get_status(hids):
+   results = []
+   db_ids = get_downloaded_ids()
+   with with_toread() as ids:
+      for hid in hids:
+         if not hid.isdecimal():
+            raise Exception("{} is not decimal".format(hid))
+
+         if hid in db_ids:
+            results.append(Status.DOWNLOADED)
+         elif hid in ids:
+            results.append(Status.TOREAD)
+         else:
+            results.append(Status.UNKNOWN)
+   return results
+
+def toread_random():
+   with with_toread() as ids:
+      if not ids:
+         message("file empty")
+         return
+
+      r = random.sample(ids, 1)[0]
+      ids.remove(r)
+      send_to_qute("open {}".format(hid_to_url(r)))
+
+def check_existance():
+   try:
+      hid = get_qute_id()
+   except InvalidUrlException:
+      return
+
+   status = get_status([hid])[0]
+   if status == Status.DOWNLOADED:
+      message("is downloaded")
+   elif status == Status.TOREAD:
+      message("is planned to be read")
+   else:
+      message("never seen before")
+
+def add_toread():
+   try:
+      hid = get_qute_id()
+   except InvalidUrlException:
+      return
+
+   with with_toread() as ids:
+      if hid in ids:
+         message("{} is already added".format(hid))
+      elif hid in get_downloaded_ids():
+         message("{} is already downloaded, no need".format(hid))
+      else:
+         ids.add(hid)
+         message("added {}".format(hid))
+
+def remove_toread():
+   try:
+      hid = get_qute_id()
+   except InvalidUrlException:
+      return
+
+   with with_toread() as ids:
+      if hid in ids:
+         message("removing {} from toread".format(hid))
+         ids.remove(hid)
+      else:
+         message("nothing to remove")
+
+def undo():
+   with with_toread(aslist=True) as ids:
+      if not ids:
+         message("file empty")
+         return
+      hid = ids.pop()
+      message("removed {}".format(hid))
+
+def turn_to_cbz(directory):
+   assert os.path.isdir(directory)
+   from zipfile import ZipFile
+   with ZipFile(directory + ".cbz", "w") as f:
+      pages = os.listdir(directory)
+      pages.sort()
+      for p in pages:
+         f.write(os.path.join(directory, p), p)
+
+   import shutil
+   shutil.rmtree(directory)
+
+def download_nhentai(hid):
+   fp = P.run(["nhentai",
+               "--id={}".format(hid),
+               "--cbz",
+               "--no-html",
+               "--rm-origin-dir",
+               "--output={}".format(HENTAIDIR)
+            ],
+            stdout=P.PIPE,
+            stderr=P.PIPE,
+            text=True,
+            check=False)
+
+   if fp.stderr:
+      for l in fp.stderr.split("\n"):
+         message(l)
+      raise Exception("nhentai downloader wrote something to stderr")
+
+   warningerror = re.compile(r".*\[(WARNING|ERROR)\]")
+   ignoreerrors = ["does not exist, creating.", "`nhentai --cookie` to set your cookie"]
+   for l in fp.stdout.split("\n"):
+      if warningerror.match(l) and not any(l.endswith(x) for x in ignoreerrors):
+         message(l)
+
+   fp.check_returncode()
+
+def download_gallery_dl(hid):
+   fp = P.run(["gallery-dl",
+               "-d", HENTAIDIR,
+               "-o", "filename={num:03}.{extension}",
+               "-o", 'directory=["[{gallery_id}][{title:.80}]"]',
+               hid_to_url(hid)
+               ],
+              stdout=P.PIPE,
+              stderr=P.PIPE,
+              text=True,
+              check=False)
+
+   if fp.stderr:
+      for l in fp.stderr.split("\n"):
+         message(l)
+      raise Exception("nhentai downloader wrote something to stderr")
+
+   files = 0
+   outfolder=None
+   for l in fp.stdout.rstrip().split("\n"):
+      line = l.removeprefix("# ")
+      if not line.startswith(HENTAIDIR):
+         raise Exception("unexpected line: '{}'".format(line))
+
+      files += 1
+      outfolder = os.path.dirname(line)
+
+   if files <= 0 or outfolder is None:
+      raise Exception("did not download anything")
+
+   fp.check_returncode()
+
+   turn_to_cbz(outfolder)
+   return files
+
+def download():
+   try:
+      hid = get_qute_id()
+   except InvalidUrlException:
+      return
+
+   if hid in get_downloaded_ids():
+      message("{} is already downloaded".format(hid))
+      return
+
+   message("starting download of {}".format(hid))
+   # download_nhentai(hid)
+   count = download_gallery_dl(hid)
+
+   with with_toread() as ids:
+      if hid in ids:
+         ids.remove(hid)
+
+   message("done with {}, downloaded {} pages".format(hid, count))
+
+def mark_webpage():
+   webpage = get_qute_page()
+
+   covers = []
+   for caption in webpage.select("div.gallery > a.cover > div.caption"):
+      hent_url = caption.parent["href"]
+      if match := shorttoreadfinder.fullmatch(hent_url):
+         hid = match.group(1)
+      else:
+         continue
+      sel = unique_selector(caption)
+      if sel is None:
+         qute_wprint(f"selector for {hid} returned None")
+         continue
+      covers.append((hid, sel))
+
+   statuses = get_status(hid for hid, _ in covers)
+   for status, (_, sel) in zip(statuses, covers):
+      if status == Status.UNKNOWN:
+         continue
+      elif status == Status.DOWNLOADED:
+         color = "black"
+      else:
+         color = "yellow"
+      command = "document.querySelector(\"{}\").style.color = \"{}\"".format(sel, color)
+      qute_jseval(command)
+
+def fixup_toread():
+   db_ids = get_downloaded_ids()
+   with with_toread() as ids:
+      len_before = len(ids)
+      ids.difference_update(db_ids)
+      len_after = len(ids)
+   print("removed {} entries from toread".format(len_before - len_after))
+
+def main():
+   global QUTE_URL
+
+   parser = argparse.ArgumentParser(description="some things to organize nhentai chapters")
+
+   parser.add_argument("url", nargs="?")
+   parser.add_argument("--add", action="store_true", help="add to toread")
+   parser.add_argument("--exists", action="store_true", help="check if we have seen this thing before")
+   parser.add_argument("--random", action="store_true", help="open a new chapter from toread")
+   parser.add_argument("--download", action="store_true", help="download current chapter")
+   parser.add_argument("--undo", action="store_true", help="remove latest addition to toread")
+   parser.add_argument("--remove", action="store_true", help="remove current chapter from toread")
+   parser.add_argument("--mark", action="store_true", help="generate javascript to colorize current page")
+   parser.add_argument("--fixup-toread", action="store_true", help="remove downloaded entries from toread")
+
+   args = parser.parse_args()
+
+   if args.fixup_toread:
+      fixup_toread()
+      exit(0)
+
+   if not started_from_qute():
+      print("this must be run from withing qutebrowser", file=sys.stderr)
+      exit(1)
+
+   QUTE_URL = args.url if args.url is not None else os.environ["QUTE_URL"]
+
+   if args.add:
+      add_toread()
+   elif args.exists:
+      check_existance()
+   elif args.random:
+      toread_random()
+   elif args.download:
+      download()
+   elif args.undo:
+      undo()
+   elif args.remove:
+      remove_toread()
+   elif args.mark:
+      mark_webpage()
+
+if __name__ == "__main__":
+   main()

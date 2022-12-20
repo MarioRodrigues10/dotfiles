@@ -1,0 +1,6 @@
+#!/bin/bash
+if "$QUTE_CONFIG_DIR/userscripts/instaloot" --all; then
+    notify-send instaloot done
+else
+    notify-send instaloot fail
+fi

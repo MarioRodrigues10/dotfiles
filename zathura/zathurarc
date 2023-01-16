@@ -1,0 +1,79 @@
+set statusbar -h-padding 0
+set statusbar -v-padding 0
+set page-padding 1
+map u scroll half-up
+map d scroll half-down
+map i recolor
+map n navigate next
+map p navigate previous
+map q quit
+map z zoom in
+map x zoom out
+set guioptions none
+set font "terminus 9"
+unmap f
+
+# colors
+
+#set recolor true
+#set recolor-darkcolor #121419"
+#set recolor-lightcolor #7d7d7d"
+#set statusbar-fg "#c9c9c9"
+#set statusbar-bg "#121419"
+
+set window-title-basename "true"
+set selection-clipboard "clipboard"
+
+# Dracula color theme for Zathura (modified by me)
+# Swaps Foreground for Background to get a light version if the user prefers
+
+#
+# Dracula color theme
+#
+
+set notification-error-bg       "#ff5555" # Red
+set notification-error-fg       "#f8f8f2" # Foreground
+set notification-warning-bg     "#ffb86c" # Orange
+set notification-warning-fg     "#44475a" # Selection
+set notification-bg             "#1d1d1d" # Background
+set notification-fg             "#c7c7c7" # Foreground
+
+set completion-bg               "#1d1d1d" # Background
+set completion-fg               "#6272a4" # Comment
+set completion-group-bg         "#1d1d1d" # Background
+set completion-group-fg         "#6272a4" # Comment
+set completion-highlight-bg     "#44475a" # Selection
+set completion-highlight-fg     "#f8f8f2" # Foreground
+
+set index-bg                    "#1d1d1d" # Background
+set index-fg                    "#c7c7c7" # Foreground
+set index-active-bg             "#44475a" # Current Line
+set index-active-fg             "#c7c7c7" # Foreground
+
+set inputbar-bg                 "#1d1d1d" # Background
+set inputbar-fg                 "#c7c7c7" # Foreground
+set statusbar-bg                "#1d1d1d" # Background
+set statusbar-fg                "#c7c7c7" # Foreground
+
+set highlight-color             "#82ABAA" # teal
+set highlight-active-color      "#F7C4E0" # Pink
+
+set default-bg                  "#1d1d1d" # Background
+set default-fg                  "#c7c7c7" # Foreground
+
+set render-loading              true
+set render-loading-fg           "#1d1d1d" # Background
+set render-loading-bg           "#c7c7c7" # Foreground
+
+#
+# Recolor mode settings
+#
+
+set recolor-lightcolor          "#1d1d1d" # Background
+set recolor-darkcolor           "#c7c7c7" # Foreground
+
+#
+# Startup options
+#
+set adjust-open width
+set recolor true

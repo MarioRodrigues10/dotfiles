@@ -1,4 +1,0 @@
-#!/bin/bash
-
-exec urxvt -hold -e "$QUTE_CONFIG_DIR/userscripts/openranger"
-

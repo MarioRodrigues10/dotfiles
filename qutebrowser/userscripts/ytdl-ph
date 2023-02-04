@@ -1,6 +1,0 @@
-#!/bin/bash
-
-DLDIR=$HOME/Videos/ph
-YTDLFLAGS=(--no-playlist)
-
-source "$QUTE_CONFIG_DIR"/userscripts/ytdl

@@ -1,2 +1,0 @@
-#!/bin/bash
-"$QUTE_CONFIG_DIR/userscripts/instaloot" --current

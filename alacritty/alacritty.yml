@@ -4,7 +4,7 @@ window:
     x: 5
     y: 5
 
-  opacity: 1.0
+  opacity: 2
 
   dynamic_padding: false
 
@@ -18,12 +18,11 @@ scrolling:
 
 font:
   normal:
-    family: "monospace"
-
+    family: "Fira Code"
+    style: Regular
   bold:
     family: "monospace"
-    style: Regular
-
+    style: Bold
   italic:
     family: "monospace"
     style: Light
@@ -36,3 +35,34 @@ font:
 
 draw_bold_text_with_bright_colors: true
 
+custom_cursor_colors: true
+
+bell:
+  animation: EaseOut
+  color: '0xffffff'
+  duration: 0
+
+mouse:
+  double_click: { threshold: 300 }
+  triple_click: { threshold: 300 }
+  hide_when_typing: true
+
+selection:
+  semantic_escape_chars: ",│`|:\"' ()[]{}<>"
+  save_to_clipboard: true
+
+mouse_bindings:
+  - { mouse: Middle, action: PasteSelection }
+
+cursor:
+  style: Beam
+  unfocused_hollow: true
+
+dynamic_title: true
+
+
+colors:
+  primary:
+    foreground: '#ffffff'
+env:
+ WINIT_X11_SCALE_FACTOR: "1.5"
